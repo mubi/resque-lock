@@ -21,6 +21,7 @@ class LockTest < Test::Unit::TestCase
   def setup
     Resque.redis.del('queue:lock_test')
     Resque.redis.del(Job.lock)
+    Resque.redis.del(JobWithOptionalQueueOnlyLocking.lock)
   end
 
   def test_lint
@@ -56,5 +57,42 @@ class LockTest < Test::Unit::TestCase
     sleep 3
     Resque.enqueue(Job)
     assert_equal 2, Resque.redis.llen('queue:lock_test')
+  end
+
+  class JobWithOptionalQueueOnlyLocking
+    extend Resque::Plugins::Lock
+    @queue = :lock_test
+    class << self
+      attr_accessor :unlock_while_performing
+    end
+
+    def self.perform
+      Resque.enqueue(self)
+      if unlock_while_performing
+        raise 'this job should be queueable while it is running' unless
+          Resque.redis.llen('queue:lock_test') == 1
+      else
+        raise 'this job should NOT be queueable while it is running' unless
+          Resque.redis.llen('queue:lock_test') == 0
+      end
+    end
+  end
+
+  def test_queue_is_normally_locked_when_job_running
+    JobWithOptionalQueueOnlyLocking.unlock_while_performing = nil
+    Resque.enqueue(JobWithOptionalQueueOnlyLocking)
+    job  = Resque.reserve('lock_test')
+    job.perform
+  rescue => e
+    flunk e.message
+  end
+
+  def test_queue_only_locking
+    JobWithOptionalQueueOnlyLocking.unlock_while_performing = true
+    Resque.enqueue(JobWithOptionalQueueOnlyLocking)
+    job  = Resque.reserve('lock_test')
+    job.perform
+  rescue => e
+    flunk e.message
   end
 end

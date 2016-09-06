@@ -75,6 +75,10 @@ module Resque
         now > Resque.redis.getset(key, timeout).to_i
       end
 
+      def before_perform_lock(*args)
+        Resque.redis.del(lock(*args)) if @unlock_while_performing
+      end
+
       def around_perform_lock(*args)
         begin
           yield
