@@ -43,4 +43,22 @@ UpdateNetworkGraph is queued at a time, regardless of the
 repo_id. Normally a job is locked using a combination of its
 class name and arguments.
 
+If you don't want to have to wait until a job has completed
+before being able to enqueue another job with the same
+arguments, you can set the `unlock_while_performing` flag:
+
+    class UpdateNetworkGraph
+      extend Resque::Plugins::Lock
+      @unlock_while_performing = true
+
+      # etc ...
+    end
+
+With this option set, another job of the same type with the
+same arguments can be queued even while the original one is
+being performed. Otherwise, the queue will remain locked
+until the job has completed. This option can be useful if you
+know that some data has changed which the currently-performing
+job will not have taken into account.
+
 [rq]: http://github.com/defunkt/resque
